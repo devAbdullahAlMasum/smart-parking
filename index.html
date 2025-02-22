@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <title>Smart Parking Dashboard</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <!-- Tailwind CSS (via CDN) -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Firebase SDKs -->
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+  <!-- Font Awesome for icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
+  <!-- Google Fonts: Poppins and Roboto -->
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;700&family=Roboto:wght@400;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Roboto', sans-serif;
+      background-color: #111827;
+    }
+    h1, h2, h3 {
+      font-family: 'Poppins', sans-serif;
+    }
+    /* Tab panel default: hidden */
+    .tab-panel { display: none; opacity: 0; transition: opacity 0.3s ease-in-out; }
+    /* When active, show it */
+    .tab-panel.active { display: block; opacity: 1; }
+    /* Loading Screen & Spinner */
+    .hidden { display: none; }
+    .spinner {
+      border: 4px solid transparent;
+      border-top: 4px solid #3B82F6;
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    .loading-text {
+      animation: fadeIn 1s ease-in-out infinite alternate;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0.5; }
+      to { opacity: 1; }
+    }
+    .animate-fadeIn {
+      animation: fadeIn 0.3s ease-in;
+    }
+  </style>
+</head>
+<body class="bg-gray-950 text-gray-100">
+  <!-- Loading Screen -->
+  <div id="loadingScreen" class="fixed inset-0 flex flex-col items-center justify-center bg-gray-950 z-50 hidden">
+    <div class="flex flex-col items-center space-y-4">
+      <div class="flex items-center space-x-2">
+        <!-- Car Icon -->
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M3 13l2-2m0 0l4-4 2 2-4 4m4-4l4 4 2-2-4-4m-6 6h6m-6 0l-2 2m8-2l2 2M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/>
+        </svg>
+        <span class="text-3xl font-bold loading-text">Smart Parking</span>
+      </div>
+      <div class="spinner"></div>
+    </div>
+  </div>
+
+  <!-- Mobile Header with Hamburger Icon -->
+  <header class="bg-gray-900 p-4 md:hidden flex items-center justify-between">
+    <h1 class="text-xl font-bold text-white">Smart Parking</h1>
+    <button id="hamburger" class="focus:outline-none">
+      <svg class="w-6 h-6 text-gray-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M4 6h16M4 12h16M4 18h16"/>
+      </svg>
+    </button>
+  </header>
+
+  <!-- Mobile Full-Screen Overlay Menu -->
+  <div id="mobileMenu" class="fixed inset-0 bg-gray-900 bg-opacity-95 z-50 hidden md:hidden">
+    <div class="p-6">
+      <div class="flex items-center justify-between mb-8">
+        <h2 class="text-2xl font-bold text-white">Smart Parking</h2>
+        <button id="closeMenu" class="focus:outline-none">
+          <svg class="w-6 h-6 text-gray-100" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M6 18L18 6M6 6l12 12"/>
+          </svg>
+        </button>
+      </div>
+      <nav class="space-y-4">
+        <button class="mobile-nav-btn w-full text-left px-4 py-3 rounded hover:bg-gray-800" data-tab="dashboard">
+          <i class="fas fa-tachometer-alt mr-2"></i> Dashboard
+        </button>
+        <button class="mobile-nav-btn w-full text-left px-4 py-3 rounded hover:bg-gray-800" data-tab="slots">
+          <i class="fas fa-parking mr-2"></i> Parking Slots
+        </button>
+        <button class="mobile-nav-btn w-full text-left px-4 py-3 rounded hover:bg-gray-800" data-tab="history">
+          <i class="fas fa-history mr-2"></i> History
+        </button>
+        <button class="mobile-nav-btn w-full text-left px-4 py-3 rounded hover:bg-gray-800" data-tab="calculator">
+          <i class="fas fa-calculator mr-2"></i> Calculator
+        </button>
+      </nav>
+    </div>
+  </div>
+
+  <div class="flex flex-col md:flex-row min-h-screen">
+    <!-- Sidebar for Desktop -->
+    <aside id="sidebarDesktop" class="hidden md:block w-64 bg-gray-900 p-6">
+      <h2 class="text-2xl font-bold mb-8 text-white">Smart Parking</h2>
+      <nav class="space-y-4">
+        <button class="nav-btn w-full text-left px-4 py-3 rounded hover:bg-gray-800" data-tab="dashboard">
+          <i class="fas fa-tachometer-alt mr-2"></i> Dashboard
+        </button>
+        <button class="nav-btn w-full text-left px-4 py-3 rounded hover:bg-gray-800" data-tab="slots">
+          <i class="fas fa-parking mr-2"></i> Parking Slots
+        </button>
+        <button class="nav-btn w-full text-left px-4 py-3 rounded hover:bg-gray-800" data-tab="history">
+          <i class="fas fa-history mr-2"></i> History
+        </button>
+        <button class="nav-btn w-full text-left px-4 py-3 rounded hover:bg-gray-800" data-tab="calculator">
+          <i class="fas fa-calculator mr-2"></i> Calculator
+        </button>
+      </nav>
+    </aside>
+
+    <!-- Main Content Container -->
+    <div class="flex-1 flex flex-col">
+      <main class="flex-1 p-8">
+        <header class="mb-8">
+          <h1 id="pageTitle" class="text-3xl font-bold text-white">Dashboard</h1>
+        </header>
+
+        <!-- Dashboard Section -->
+        <section id="dashboard" class="tab-panel active animate-fadeIn">
+          <!-- Stats Overview -->
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="bg-gray-800 p-6 rounded-xl shadow-md hover:shadow-lg transition-shadow flex items-center space-x-4">
+              <i class="fas fa-th-large text-3xl text-blue-400"></i>
+              <div>
+                <p class="text-sm text-gray-400">Total Slots</p>
+                <p id="totalSlots" class="text-2xl font-bold text-white">5</p>
+              </div>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-xl shadow-md hover:shadow-lg transition-shadow flex items-center space-x-4">
+              <i class="fas fa-car text-3xl text-red-400"></i>
+              <div>
+                <p class="text-sm text-gray-400">Occupied</p>
+                <p id="occupiedSlots" class="text-2xl font-bold text-white">0</p>
+              </div>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-xl shadow-md hover:shadow-lg transition-shadow flex items-center space-x-4">
+              <i class="fas fa-parking text-3xl text-green-400"></i>
+              <div>
+                <p class="text-sm text-gray-400">Available</p>
+                <p id="availableSlots" class="text-2xl font-bold text-white">0</p>
+              </div>
+            </div>
+            <div class="bg-gray-800 p-6 rounded-xl shadow-md hover:shadow-lg transition-shadow flex items-center space-x-4">
+              <i class="fas fa-dollar-sign text-3xl text-yellow-400"></i>
+              <div>
+                <p class="text-sm text-gray-400">Daily Revenue</p>
+                <p id="dailyRevenue" class="text-2xl font-bold text-white">৳0</p>
+              </div>
+            </div>
+          </div>
+
+          <!-- Live Parking Status -->
+          <div class="bg-gray-800 rounded-xl shadow-md p-6 mb-8">
+            <h2 class="text-xl font-semibold mb-4 text-white">Live Parking Status</h2>
+            <div id="parkingLot" class="grid grid-cols-5 gap-4">
+              <!-- Parking slot boxes injected dynamically -->
+            </div>
+            <p class="mt-4 text-sm text-gray-400">Green = Empty, Red = Occupied</p>
+          </div>
+        </section>
+
+        <!-- Parking Slots Section -->
+        <section id="slots" class="tab-panel animate-fadeIn hidden">
+          <div class="bg-gray-800 rounded-xl shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4 text-white">Detailed Slot Information</h2>
+            <div id="slotsDetail" class="space-y-4">
+              <!-- Detailed slot info injected here -->
+            </div>
+          </div>
+        </section>
+
+        <!-- History Section -->
+        <section id="history" class="tab-panel animate-fadeIn hidden">
+          <div class="bg-gray-800 rounded-xl shadow-md p-6">
+            <h2 class="text-xl font-semibold mb-4 text-white">Parking History (Last 24 Hours)</h2>
+            <div class="overflow-x-auto">
+              <table class="min-w-full border border-gray-700">
+                <thead class="bg-gray-700">
+                  <tr>
+                    <th class="px-4 py-2 border cursor-pointer">Slot</th>
+                    <th class="px-4 py-2 border cursor-pointer">Entry Time</th>
+                    <th class="px-4 py-2 border cursor-pointer">Exit Time</th>
+                    <th class="px-4 py-2 border cursor-pointer">Duration (min)</th>
+                    <th class="px-4 py-2 border cursor-pointer">Cost (taka)</th>
+                  </tr>
+                </thead>
+                <tbody id="historyTable" class="divide-y divide-gray-700">
+                  <!-- History records injected here -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- Calculator Section -->
+        <section id="calculator" class="tab-panel animate-fadeIn hidden">
+          <div class="bg-gray-800 rounded-xl shadow-md p-6 max-w-md mx-auto">
+            <h2 class="text-xl font-semibold mb-4 text-white">Parking Cost Calculator</h2>
+            <div class="mb-4">
+              <label class="block text-sm font-medium text-gray-300 mb-2">Select Parking Slot</label>
+              <select id="calcSlotSelect" class="w-full p-3 border border-gray-700 rounded bg-gray-900 text-gray-100">
+                <option value="1">Slot 1</option>
+                <option value="2">Slot 2</option>
+                <option value="3">Slot 3</option>
+                <option value="4">Slot 4</option>
+                <option value="5">Slot 5</option>
+              </select>
+            </div>
+            <div id="calcCostDisplay" class="mt-4 p-4 bg-gray-700 rounded text-xl font-bold text-white"></div>
+            <button id="calculateNow" class="mt-4 w-full bg-blue-600 hover:bg-blue-700 text-white py-2 rounded">Calculate Now</button>
+          </div>
+        </section>
+      </main>
+    </div>
+  </div>
+
+  <!-- Firebase Initialization -->
+  <script>
+    // Replace with your actual Firebase configuration
+    var firebaseConfig = {
+      apiKey: "YOUR_API_KEY",
+      authDomain: "your_project.firebaseapp.com",
+      databaseURL: "https://your_project.firebaseio.com",
+      projectId: "your_project",
+      storageBucket: "your_project.appspot.com",
+      messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+      appId: "YOUR_APP_ID"
+    };
+    firebase.initializeApp(firebaseConfig);
+    var database = firebase.database();
+  </script>
+
+  <!-- Main JavaScript -->
+  <script>
+    const costPerMinute = 500; // 500 taka per minute
+
+    // Mobile menu toggle logic
+    const hamburger = document.getElementById('hamburger');
+    const mobileMenu = document.getElementById('mobileMenu');
+    const closeMenu = document.getElementById('closeMenu');
+    hamburger.addEventListener('click', () => {
+      mobileMenu.classList.remove('hidden');
+    });
+    closeMenu.addEventListener('click', () => {
+      mobileMenu.classList.add('hidden');
+    });
+
+    // Function to show loading screen with animation
+    function showLoading() {
+      const loading = document.getElementById('loadingScreen');
+      loading.classList.remove('hidden');
+      setTimeout(() => {
+        loading.classList.add('hidden');
+      }, 500); // Show loading for 500ms
+    }
+
+    // Navigation logic: switch between tabs, show loading, and close mobile menu if open
+    function setActiveTab(tabName) {
+      showLoading();
+      // Reset styling for both desktop and mobile nav buttons
+      document.querySelectorAll('.nav-btn, .mobile-nav-btn').forEach(btn => {
+        btn.classList.remove('bg-blue-600', 'text-white', 'hover:bg-blue-700');
+        btn.classList.add('hover:bg-gray-800');
+      });
+      // Set active state for all buttons with matching data-tab
+      document.querySelectorAll(`[data-tab="${tabName}"]`).forEach(btn => {
+        btn.classList.remove('hover:bg-gray-800');
+        btn.classList.add('bg-blue-600', 'text-white', 'hover:bg-blue-700');
+      });
+      // Switch tab content: remove "active" and add "hidden" to all, then show selected
+      document.querySelectorAll('.tab-panel').forEach(tc => {
+        tc.classList.remove('active');
+        tc.classList.add('hidden');
+      });
+      document.getElementById(tabName).classList.add('active');
+      document.getElementById(tabName).classList.remove('hidden');
+      document.getElementById('pageTitle').innerText = tabName.charAt(0).toUpperCase() + tabName.slice(1);
+      // Close mobile menu if open
+      if (window.innerWidth < 768) {
+        mobileMenu.classList.add('hidden');
+      }
+    }
+
+    // Desktop nav buttons
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        let tab = this.getAttribute('data-tab');
+        setActiveTab(tab);
+      });
+    });
+    // Mobile nav buttons
+    document.querySelectorAll('.mobile-nav-btn').forEach(btn => {
+      btn.addEventListener('click', function() {
+        let tab = this.getAttribute('data-tab');
+        setActiveTab(tab);
+      });
+    });
+
+    // Listen for Firebase /status updates
+    database.ref('/status').on('value', function(snapshot) {
+      let data = snapshot.val();
+      if (data) {
+        document.getElementById('totalSlots').innerText = '5';
+        let freeSlots = data.freeSlots || 0;
+        let occupied = 5 - freeSlots;
+        document.getElementById('occupiedSlots').innerText = occupied;
+        document.getElementById('availableSlots').innerText = freeSlots;
+        // Placeholder daily revenue:
+        document.getElementById('dailyRevenue').innerText = '৳15,000';
+        updateParkingLot(data);
+        updateSlotsDetail(data);
+      }
+    });
+
+    // Listen for new parking events for History section
+    database.ref('/parkingEvents').on('child_added', function(snapshot) {
+      let event = snapshot.val();
+      let now = Date.now();
+      // Only show events from the last 24 hours
+      if (now - parseInt(event.exitTime) <= 24 * 60 * 60 * 1000) {
+        addHistoryRecord(event);
+      }
+    });
+
+    // Update parking lot illustration on Dashboard
+    function updateParkingLot(data) {
+      let container = document.getElementById('parkingLot');
+      container.innerHTML = '';
+      for (let i = 1; i <= 5; i++) {
+        let slot = data['slot' + i];
+        let div = document.createElement('div');
+        div.className = `flex flex-col items-center justify-center p-4 rounded-xl transition-all duration-300 hover:shadow-lg ${
+          slot && slot.status === 'Occupied' ? 'bg-red-600' : 'bg-green-600'
+        }`;
+        div.innerHTML = `<div class="text-2xl font-bold text-white">Slot ${i}</div>
+          ${slot && slot.status === 'Occupied' ? '<i class="fas fa-car text-3xl mt-2 text-red-400"></i>' : '<i class="fas fa-parking text-3xl mt-2 text-green-400"></i>'}
+          ${slot && slot.status === 'Occupied' && slot.entryTime ? `<div class="mt-1 text-xs text-gray-200">${new Date(parseInt(slot.entryTime)).toLocaleTimeString()}</div>` : ''}`;
+        container.appendChild(div);
+      }
+    }
+
+    // Update detailed slot information on Slots page
+    function updateSlotsDetail(data) {
+      let container = document.getElementById('slotsDetail');
+      container.innerHTML = '';
+      for (let i = 1; i <= 5; i++) {
+        let slot = data['slot' + i];
+        let div = document.createElement('div');
+        div.className = "flex items-center justify-between p-4 rounded-lg border border-gray-700";
+        div.innerHTML = `<div class="flex items-center space-x-4">
+            <div class="p-3 rounded-lg ${slot && slot.status === 'Occupied' ? 'bg-red-900' : 'bg-green-900'}">
+              <i class="fas fa-car text-xl ${slot && slot.status === 'Occupied' ? 'text-red-400' : 'text-green-400'}"></i>
+            </div>
+            <div>
+              <h3 class="font-semibold text-white">Slot ${i}</h3>
+              <p class="text-sm text-gray-400">
+                ${slot && slot.status === 'Occupied' ? 'Occupied since ' + new Date(parseInt(slot.entryTime)).toLocaleTimeString() : 'Available'}
+              </p>
+            </div>
+          </div>`;
+        container.appendChild(div);
+      }
+    }
+
+    // Add a history record to the History page
+    function addHistoryRecord(event) {
+      let table = document.getElementById('historyTable');
+      let row = document.createElement('tr');
+      row.className = 'hover:bg-gray-800 animate-fadeIn';
+      row.innerHTML = `<td class="px-4 py-2 border text-white">${event.slot}</td>
+                       <td class="px-4 py-2 border text-white">${new Date(parseInt(event.entryTime)).toLocaleString()}</td>
+                       <td class="px-4 py-2 border text-white">${new Date(parseInt(event.exitTime)).toLocaleString()}</td>
+                       <td class="px-4 py-2 border text-white">${event.durationMinutes}</td>
+                       <td class="px-4 py-2 border text-white">${event.cost}</td>`;
+      table.appendChild(row);
+    }
+
+    // Real-time cost calculator update
+    function updateCostCalculator() {
+      let selectedSlot = document.getElementById('calcSlotSelect').value;
+      database.ref('/status/slot' + selectedSlot).once('value').then(function(snapshot) {
+        let slot = snapshot.val();
+        if (slot && slot.status === 'Occupied' && slot.entryTime) {
+          let entryTime = parseInt(slot.entryTime);
+          let now = Date.now();
+          let duration = Math.ceil((now - entryTime) / 60000);
+          let cost = duration * costPerMinute;
+          document.getElementById('calcCostDisplay').innerText = `Time parked: ${duration} min - Cost: ${cost} taka`;
+        } else {
+          document.getElementById('calcCostDisplay').innerText = `Slot ${selectedSlot} is not currently occupied.`;
+        }
+      });
+    }
+
+    // Event listeners for cost calculator
+    document.getElementById('calcSlotSelect').addEventListener('change', updateCostCalculator);
+    document.getElementById('calculateNow').addEventListener('click', updateCostCalculator);
+  </script>
+</body>
+</html>
